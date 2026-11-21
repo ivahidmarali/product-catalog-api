@@ -9,26 +9,35 @@ const optionalInt = (schema: z.ZodNumber): z.ZodEffects<z.ZodOptional<z.ZodNumbe
 
 const priceCents = z.number().int().min(0).max(MAX_PRICE_CENTS);
 
+// Postgres text columns cannot store the null character, so reject it here instead of failing in the database.
+const text = (min: number, max: number): z.ZodEffects<z.ZodString> =>
+  z
+    .string()
+    .trim()
+    .min(min)
+    .max(max)
+    .refine((value) => !value.includes('\u0000'), { message: 'Must not contain null characters' });
+
 export const productIdParams = z.object({
   id: z.string().uuid(),
 });
 
 export const createProductBody = z
   .object({
-    sku: z.string().trim().min(1).max(64),
-    name: z.string().trim().min(1).max(200),
-    description: z.string().max(5000).default(''),
-    category: z.string().trim().min(1).max(100),
+    sku: text(1, 64),
+    name: text(1, 200),
+    description: text(0, 5000).default(''),
+    category: text(1, 100),
     priceCents: priceCents.describe('Price in euro cents, e.g. 1999 for EUR 19.99'),
   })
   .strict();
 
 export const updateProductBody = z
   .object({
-    sku: z.string().trim().min(1).max(64),
-    name: z.string().trim().min(1).max(200),
-    description: z.string().max(5000),
-    category: z.string().trim().min(1).max(100),
+    sku: text(1, 64),
+    name: text(1, 200),
+    description: text(0, 5000),
+    category: text(1, 100),
     priceCents,
   })
   .partial()
@@ -37,7 +46,7 @@ export const updateProductBody = z
 
 export const listProductsQuery = z
   .object({
-    category: z.string().trim().min(1).max(100).optional(),
+    category: text(1, 100).optional(),
     minPriceCents: optionalInt(priceCents),
     maxPriceCents: optionalInt(priceCents),
     sort: z.enum(productSorts).default('newest'),

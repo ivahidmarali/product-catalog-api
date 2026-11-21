@@ -140,6 +140,7 @@ describe('POST /products', () => {
     ['a price as text', { sku: 'A', name: 'A', category: 'c', priceCents: '100' }],
     ['an empty name', { sku: 'A', name: '   ', category: 'c', priceCents: 1 }],
     ['an unknown field', { sku: 'A', name: 'A', category: 'c', priceCents: 1, price: 1 }],
+    ['a null character in the name', { sku: 'A', name: 'a\u0000b', category: 'c', priceCents: 1 }],
   ])('rejects %s', async (_case, payload) => {
     const response = await ctx.app.inject({ method: 'POST', url: '/products', headers: auth, payload });
 
@@ -156,6 +157,7 @@ describe('POST /products', () => {
     });
 
     expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
   });
 });
 

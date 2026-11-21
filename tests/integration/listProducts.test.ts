@@ -135,6 +135,7 @@ describe('GET /products', () => {
     ['min above max', 'minPriceCents=5000&maxPriceCents=1000'],
     ['unknown sort', 'sort=name'],
     ['broken cursor', 'cursor=abc'],
+    ['null character in category', 'category=a%00b'],
   ])('rejects %s with 400', async (_case, query) => {
     const { statusCode } = await list(query);
 

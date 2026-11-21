@@ -33,9 +33,11 @@ export const errorHandler = (error: FastifyError, request: FastifyRequest, reply
     return reply.code(status).send({ error: { code: error.code, message: error.message } });
   }
 
-  // Fastify's own client errors, for example a body that is not valid JSON.
+  // Client errors raised by Fastify itself (invalid JSON, empty body, body too large) or by our routes (412).
+  // Fastify's internal codes like FST_ERR_CTP_EMPTY_JSON_BODY are not part of our API, so they become BAD_REQUEST.
   if (error.statusCode && error.statusCode < 500) {
-    return reply.code(error.statusCode).send({ error: { code: error.code ?? 'BAD_REQUEST', message: error.message } });
+    const code = !error.code || error.code.startsWith('FST_') ? 'BAD_REQUEST' : error.code;
+    return reply.code(error.statusCode).send({ error: { code, message: error.message } });
   }
 
   request.log.error({ err: error }, 'Unhandled error');
