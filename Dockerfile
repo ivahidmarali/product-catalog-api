@@ -15,4 +15,5 @@ COPY migrations ./migrations
 COPY package.json ./
 USER node
 EXPOSE 3000
-CMD ["sh", "-c", "node dist/Infrastructure/Postgres/migrate.js && node dist/index.js"]
+# exec replaces the shell, so node is PID 1 and receives SIGTERM for a clean shutdown.
+CMD ["sh", "-c", "node dist/Infrastructure/Postgres/migrate.js && exec node dist/index.js"]

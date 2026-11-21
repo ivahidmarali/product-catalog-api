@@ -76,6 +76,12 @@ describe('authentication on writes', () => {
     expect(get.json()).toEqual(product);
   });
 
+  it('checks the key before validating the body', async () => {
+    const response = await ctx.app.inject({ method: 'POST', url: '/products', payload: { nonsense: true } });
+
+    expect(response.statusCode).toBe(401);
+  });
+
   it('lets anyone read without a key', async () => {
     const product = await createProduct();
 
@@ -178,6 +184,30 @@ describe('GET /products/:id', () => {
     expect(response.body).toBe('');
   });
 
+  it.each([['W/"v1"'], ['"v7", "v1"'], ['*']])('answers 304 for If-None-Match %s', async (header) => {
+    const product = await createProduct();
+
+    const response = await ctx.app.inject({
+      method: 'GET',
+      url: `/products/${product.id}`,
+      headers: { 'if-none-match': header },
+    });
+
+    expect(response.statusCode).toBe(304);
+  });
+
+  it('returns the body when If-None-Match is an older version', async () => {
+    const product = await createProduct();
+
+    const response = await ctx.app.inject({
+      method: 'GET',
+      url: `/products/${product.id}`,
+      headers: { 'if-none-match': '"v0"' },
+    });
+
+    expect(response.statusCode).toBe(200);
+  });
+
   it('returns 404 for an unknown id', async () => {
     const response = await ctx.app.inject({ method: 'GET', url: '/products/0b6c3f9e-6d0a-4d5e-9a57-2f1f0c4d9e11' });
 
@@ -257,6 +287,20 @@ describe('PATCH /products/:id', () => {
     });
 
     expect(response.statusCode).toBe(412);
+    expect(response.json().error.code).toBe('PRECONDITION_FAILED');
+  });
+
+  it('accepts a weak If-Match ETag', async () => {
+    const product = await createProduct();
+
+    const response = await ctx.app.inject({
+      method: 'PATCH',
+      url: `/products/${product.id}`,
+      headers: { ...auth, 'if-match': 'W/"v1"' },
+      payload: { name: 'x' },
+    });
+
+    expect(response.statusCode).toBe(200);
   });
 
   it('rejects an empty update', async () => {

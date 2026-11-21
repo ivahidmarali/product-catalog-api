@@ -1,4 +1,4 @@
-import { FastifyPluginAsync, FastifyReply } from 'fastify';
+import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { ProductService } from '../../Application/Product/ProductService';
@@ -37,7 +37,7 @@ export const productRoutes =
           body: createProductBody,
           response: { 201: productResponse, 400: errorResponse, 401: errorResponse, 409: errorResponse },
         },
-        preHandler: writeGuard,
+        onRequest: writeGuard,
       },
       async (request, reply) => {
         const product = await service.create(request.body);
@@ -88,7 +88,7 @@ export const productRoutes =
         const etag = etagFor(product);
         reply.header('etag', etag).header('cache-control', ITEM_CACHE_CONTROL);
 
-        if (request.headers['if-none-match'] === etag) {
+        if (etagListMatches(request.headers['if-none-match'], etag)) {
           return reply.code(304).send(null);
         }
 
@@ -115,13 +115,10 @@ export const productRoutes =
             412: errorResponse,
           },
         },
-        preHandler: writeGuard,
+        onRequest: writeGuard,
       },
       async (request, reply) => {
-        const expectedVersion = versionFromIfMatch(request.headers['if-match'], reply);
-        if (expectedVersion === false) {
-          return reply;
-        }
+        const expectedVersion = versionFromIfMatch(request.headers['if-match']);
         const product = await service.update(request.params.id, request.body, expectedVersion);
 
         return reply.header('etag', etagFor(product)).send(toResponse(product));
@@ -139,13 +136,10 @@ export const productRoutes =
           headers: ifMatchHeaders,
           response: { 204: z.null(), 400: errorResponse, 401: errorResponse, 404: errorResponse, 412: errorResponse },
         },
-        preHandler: writeGuard,
+        onRequest: writeGuard,
       },
       async (request, reply) => {
-        const expectedVersion = versionFromIfMatch(request.headers['if-match'], reply);
-        if (expectedVersion === false) {
-          return reply;
-        }
+        const expectedVersion = versionFromIfMatch(request.headers['if-match']);
         await service.delete(request.params.id, expectedVersion);
 
         return reply.code(204).send(null);
@@ -155,21 +149,28 @@ export const productRoutes =
 
 const etagFor = (product: Product): string => `"v${product.version}"`;
 
+/** Strips the weak prefix, so `W/"v1"` and `"v1"` compare equal. */
+const normalizeEtag = (tag: string): string => tag.trim().replace(/^W\//, '');
+
+/** True when an If-None-Match header (`*`, one ETag, or a comma separated list) matches the current ETag. */
+const etagListMatches = (header: string | undefined, etag: string): boolean =>
+  header !== undefined && header.split(',').some((tag) => tag.trim() === '*' || normalizeEtag(tag) === etag);
+
 /**
- * Turns an If-Match header into the version the client expects.
- * undefined: no header or `*`, so no check. false: the header can never match, a 412 was sent.
+ * Turns an If-Match header into the version the client expects. No header or `*` means "no check".
+ * A value that is not one of our ETags can never match, so it fails right away with 412.
  */
-const versionFromIfMatch = (header: string | undefined, reply: FastifyReply): number | undefined | false => {
+const versionFromIfMatch = (header: string | undefined): number | undefined => {
   if (header === undefined || header.trim() === '*') {
     return undefined;
   }
 
-  const match = /^(?:W\/)?"v(\d{1,9})"$/.exec(header.trim());
+  const match = /^"v(\d{1,9})"$/.exec(normalizeEtag(header));
   if (!match?.[1]) {
-    reply
-      .code(412)
-      .send({ error: { code: 'PRECONDITION_FAILED', message: 'If-Match does not match the product ETag' } });
-    return false;
+    throw Object.assign(new Error('If-Match does not match the product ETag'), {
+      statusCode: 412,
+      code: 'PRECONDITION_FAILED',
+    });
   }
 
   return Number(match[1]);
