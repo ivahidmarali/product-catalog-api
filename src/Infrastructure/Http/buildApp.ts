@@ -10,12 +10,15 @@ export type AppDependencies = {
   productService: ProductService;
   /** Resolves when the database is reachable. */
   checkDatabase: () => Promise<void>;
+  /** Required in the x-api-key header for create, update and delete. */
+  writeApiKey: string;
   logger?: FastifyServerOptions['logger'];
 };
 
 export const buildApp = async ({
   productService,
   checkDatabase,
+  writeApiKey,
   logger = false,
 }: AppDependencies): Promise<FastifyInstance> => {
   const app = Fastify({ logger });
@@ -32,6 +35,9 @@ export const buildApp = async ({
   await app.register(swagger, {
     openapi: {
       info: { title: 'Product Catalog API', version: '1.0.0' },
+      components: {
+        securitySchemes: { apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key' } },
+      },
     },
     transform: jsonSchemaTransform,
   });
@@ -46,7 +52,7 @@ export const buildApp = async ({
     }
   });
 
-  await app.register(productRoutes(productService));
+  await app.register(productRoutes(productService, writeApiKey));
 
   return app;
 };

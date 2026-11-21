@@ -13,15 +13,19 @@ import {
   productResponse,
   updateProductBody,
 } from './ProductSchemas';
+import { requireApiKey } from './requireApiKey';
 
 // Reads are cheap to serve from a browser or CDN cache. Short TTLs keep stale data to a minute at most.
 const ITEM_CACHE_CONTROL = 'public, max-age=60';
 const LIST_CACHE_CONTROL = 'public, max-age=30';
 
 export const productRoutes =
-  (service: ProductService): FastifyPluginAsync =>
+  (service: ProductService, writeApiKey: string): FastifyPluginAsync =>
   async (app) => {
     const routes = app.withTypeProvider<ZodTypeProvider>();
+    // Anyone can browse the catalog. Changing it needs the API key.
+    const writeGuard = requireApiKey(writeApiKey);
+    const writeSecurity = [{ apiKey: [] }];
 
     routes.post(
       '/products',
@@ -29,9 +33,11 @@ export const productRoutes =
         schema: {
           tags: ['Products'],
           summary: 'Create a product',
+          security: writeSecurity,
           body: createProductBody,
-          response: { 201: productResponse, 400: errorResponse, 409: errorResponse },
+          response: { 201: productResponse, 400: errorResponse, 401: errorResponse, 409: errorResponse },
         },
+        preHandler: writeGuard,
       },
       async (request, reply) => {
         const product = await service.create(request.body);
@@ -96,17 +102,20 @@ export const productRoutes =
         schema: {
           tags: ['Products'],
           summary: 'Update some fields of a product',
+          security: writeSecurity,
           params: productIdParams,
           headers: ifMatchHeaders,
           body: updateProductBody,
           response: {
             200: productResponse,
             400: errorResponse,
+            401: errorResponse,
             404: errorResponse,
             409: errorResponse,
             412: errorResponse,
           },
         },
+        preHandler: writeGuard,
       },
       async (request, reply) => {
         const expectedVersion = versionFromIfMatch(request.headers['if-match'], reply);
@@ -125,10 +134,12 @@ export const productRoutes =
         schema: {
           tags: ['Products'],
           summary: 'Delete a product',
+          security: writeSecurity,
           params: productIdParams,
           headers: ifMatchHeaders,
-          response: { 204: z.null(), 400: errorResponse, 404: errorResponse, 412: errorResponse },
+          response: { 204: z.null(), 400: errorResponse, 401: errorResponse, 404: errorResponse, 412: errorResponse },
         },
+        preHandler: writeGuard,
       },
       async (request, reply) => {
         const expectedVersion = versionFromIfMatch(request.headers['if-match'], reply);

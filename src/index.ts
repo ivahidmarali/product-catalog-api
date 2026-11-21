@@ -13,6 +13,7 @@ const start = async (): Promise<void> => {
     checkDatabase: async () => {
       await pool.query('SELECT 1');
     },
+    writeApiKey: config.WRITE_API_KEY,
     logger: { level: config.LOG_LEVEL },
   });
 
