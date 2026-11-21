@@ -96,7 +96,8 @@ export class ProductPostgresRepository implements ProductRepositoryInterface {
       throw mapUniqueViolation(error, changes.sku ?? '');
     }
 
-    return this.notFoundOrConflict(id);
+    await this.throwIfStillExists(id);
+    return null;
   }
 
   async delete(id: string, expectedVersion?: number): Promise<boolean> {
@@ -108,7 +109,8 @@ export class ProductPostgresRepository implements ProductRepositoryInterface {
       return true;
     }
 
-    return (await this.notFoundOrConflict(id)) !== null;
+    await this.throwIfStillExists(id);
+    return false;
   }
 
   async list({ filter, sort, limit, after }: ProductListQuery): Promise<Product[]> {
@@ -145,15 +147,12 @@ export class ProductPostgresRepository implements ProductRepositoryInterface {
 
   /**
    * An UPDATE or DELETE that touched no rows means either the product is gone or its version moved on.
-   * Returns null for "gone" and throws for "version moved on".
+   * If it still exists, the version check is what stopped the write.
    */
-  private async notFoundOrConflict(id: string): Promise<null> {
-    const existing = await this.findById(id);
-    if (existing) {
+  private async throwIfStillExists(id: string): Promise<void> {
+    if (await this.findById(id)) {
       throw new VersionConflictError(id);
     }
-
-    return null;
   }
 }
 

@@ -28,9 +28,18 @@ describe('ProductCursorCodec', () => {
     expect(() => decodeCursor(raw, 'price_asc')).toThrow(InvalidCursorError);
   });
 
-  it('rejects a date cursor that is not a date', () => {
-    const raw = encodeRaw({ sort: 'newest', value: 'yesterday', id: ID });
+  it.each([['yesterday'], ['2026'], ['2026-01-01'], ['2026-13-45T99:99:99.999Z']])(
+    'rejects the date cursor value %s',
+    (value) => {
+      const raw = encodeRaw({ sort: 'newest', value, id: ID });
 
-    expect(() => decodeCursor(raw, 'newest')).toThrow(InvalidCursorError);
+      expect(() => decodeCursor(raw, 'newest')).toThrow(InvalidCursorError);
+    },
+  );
+
+  it('accepts a date cursor in the format the API produces', () => {
+    const cursor = { sort: 'newest' as const, value: new Date().toISOString(), id: ID };
+
+    expect(decodeCursor(encodeCursor(cursor), 'newest')).toEqual(cursor);
   });
 });

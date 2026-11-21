@@ -30,6 +30,8 @@ export const decodeCursor = (raw: string, expectedSort: ProductSort): ProductCur
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PRICE_PATTERN = /^\d{1,10}$/;
+// Exactly what Date.toISOString() produces. Looser formats like "2026" parse in JavaScript but not in Postgres.
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 // The cursor ends up in SQL parameters, so a tampered one has to fail here with a 400, not in Postgres with a 500.
 const isCursor = (value: unknown): value is ProductCursor => {
@@ -48,6 +50,6 @@ const isCursor = (value: unknown): value is ProductCursor => {
   }
 
   return candidate.sort === 'newest'
-    ? !Number.isNaN(Date.parse(candidate.value))
+    ? ISO_DATE_PATTERN.test(candidate.value) && !Number.isNaN(Date.parse(candidate.value))
     : PRICE_PATTERN.test(candidate.value) && Number(candidate.value) <= 2_147_483_647;
 };
