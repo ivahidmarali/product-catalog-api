@@ -1,7 +1,12 @@
 /** @type {import('jest').Config} */
 const shared = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
+  transform: {
+    '^.+\\.(t|j)s$': ['@swc/jest', { module: { type: 'commonjs' } }],
+  },
+  // Some Fastify dependencies (cookie, content-disposition) ship ES modules only.
+  // Jest runs CommonJS, so swc compiles node_modules too. It is fast enough that this costs about a second.
+  transformIgnorePatterns: [],
 };
 
 module.exports = {
